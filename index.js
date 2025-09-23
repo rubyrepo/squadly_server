@@ -26,6 +26,7 @@ async function run() {
     
     const db = client.db("squadlyDB");
     const announcementsCollection = db.collection("announcements");
+    const usersCollection = db.collection("users");
 
     // Create announcement
     app.post('/announcements', async (req, res) => {
@@ -77,13 +78,33 @@ async function run() {
       }
     });
 
+    // Add user registration endpoint
+    app.post('/users', async (req, res) => {
+      try {
+        const userData = req.body;
+        
+        // Check if user already exists
+        const existingUser = await usersCollection.findOne({ uid: userData.uid });
+        if (existingUser) {
+          return res.status(400).json({ message: 'User already exists' });
+        }
+
+        // Insert new user
+        const result = await usersCollection.insertOne(userData);
+        res.status(201).json(result);
+      } catch (error) {
+        console.error('Server error:', error);
+        res.status(500).json({ message: 'Internal server error', error: error.message });
+      }
+    });
+
     // Test endpoint
     app.get('/', (req, res) => {
       res.send('Squadly server is running!');
     });
 
   } finally {
-    // Don't close the client here as it needs to stay connected for the API
+    // Don't close the client connection
   }
 }
 
