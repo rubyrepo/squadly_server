@@ -1,9 +1,10 @@
 {
   "name": "squadly-server",
   "version": "1.0.0",
-  "description": "",
+  "description": "��#\u0000 \u0000s\u0000q\u0000u\u0000a\u0000d\u0000l\u0000y\u0000_\u0000s\u0000e\u0000r\u0000v\u0000e\u0000r\u0000\r\u0000 \u0000",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -12,7 +13,19 @@
   "type": "commonjs",
   "dependencies": {
     "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
     "express": "^5.1.0",
-    "mongodb": "^6.20.0"
-  }
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.20.0",
+    "mongoose": "^8.18.1",
+    "nodemon": "^3.1.10"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rubyrepo/squadly_server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rubyrepo/squadly_server/issues"
+  },
+  "homepage": "https://github.com/rubyrepo/squadly_server#readme"
 }
