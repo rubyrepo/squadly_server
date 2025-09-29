@@ -40,6 +40,7 @@ async function run() {
     const couponsCollection = db.collection("coupons");
     const courtsCollection = db.collection("courts");
     const bookingsCollection = db.collection("bookings");
+    const paymentsCollection = db.collection("payments");
 
     // ------------------- Announcement Routes -------------------
     app.post("/announcements", async (req, res) => {
@@ -349,10 +350,14 @@ async function run() {
     app.get("/bookings/approved/:email", async (req, res) => {
       try {
         const { email } = req.params;
-        const approvedBookings = await bookingsCollection
-          .find({ userEmail: email, status: "approved" })
+        const bookings = await bookingsCollection
+          .find({ 
+            userEmail: email, 
+            status: 'approved',
+            payment: { $exists: false }
+          })
           .toArray();
-        res.json(approvedBookings);
+        res.json(bookings);
       } catch (error) {
         res.status(500).json({ message: error.message });
       }
@@ -430,6 +435,114 @@ async function run() {
     // ------------------- Test endpoint -------------------
     app.get("/", (req, res) => {
       res.send("Squadly server is running!");
+    });
+
+    // Get all members (users with approved bookings)
+    app.get('/members', async (req, res) => {
+      try {
+        const bookings = await bookingsCollection
+          .find({ 
+            status: { $in: ['approved', 'confirmed'] }
+          })
+          .toArray();
+        
+        const memberEmails = [...new Set(bookings.map(booking => booking.userEmail))];
+        
+        const members = await usersCollection
+          .find({ email: { $in: memberEmails } })
+          .toArray();
+        
+        res.json(members);
+      } catch (error) {
+        res.status(500).json({ message: error.message });
+      }
+    });
+
+    // Delete member and their bookings
+    app.delete('/members/:email', async (req, res) => {
+      try {
+        const { email } = req.params;
+        await bookingsCollection.deleteMany({ 
+          userEmail: email,
+          status: { $in: ['approved', 'confirmed'] }
+        });
+        res.json({ message: 'Member bookings deleted successfully' });
+      } catch (error) {
+        res.status(500).json({ message: error.message });
+      }
+    });
+
+    // Get all users
+    app.get('/users', async (req, res) => {
+      try {
+        const users = await usersCollection.find({}).toArray();
+        res.json(users);
+      } catch (error) {
+        res.status(500).json({ message: error.message });
+      }
+    });
+
+    // Validate coupon
+    app.get('/coupons/validate/:code', async (req, res) => {
+      try {
+        const { code } = req.params;
+        const coupon = await couponsCollection.findOne({ code });
+        
+        if (!coupon) {
+          return res.json({ valid: false });
+        }
+
+        res.json({
+          valid: true,
+          discount: coupon.discount
+        });
+      } catch (error) {
+        res.status(500).json({ message: error.message });
+      }
+    });
+
+    // Process payment
+    app.post('/payments', async (req, res) => {
+      try {
+        const paymentData = req.body;
+        
+        // Create payment record
+        const payment = await paymentsCollection.insertOne({
+          ...paymentData,
+          status: 'completed',
+          createdAt: new Date()
+        });
+
+        // Update booking status
+        await bookingsCollection.updateOne(
+          { _id: new ObjectId(paymentData.bookingId) },
+          { 
+            $set: { 
+              status: 'confirmed',
+              payment: payment.insertedId
+            }
+          }
+        );
+
+        res.status(201).json({ message: 'Payment processed successfully' });
+      } catch (error) {
+        res.status(500).json({ message: error.message });
+      }
+    });
+
+    // Check if user is a member
+    app.get('/members/check/:email', async (req, res) => {
+      try {
+        const { email } = req.params;
+        const bookings = await bookingsCollection.find({
+          userEmail: email,
+          status: { $in: ['approved', 'confirmed'] }
+        }).toArray();
+        
+        res.json({ isMember: bookings.length > 0 });
+      } catch (error) {
+        res.status(500).json({ message: error.message });
+      }
     });
   } finally {
     // Keep connection alive
