@@ -44,48 +44,81 @@ async function run() {
     // ------------------- Announcement Routes -------------------
     app.post("/announcements", async (req, res) => {
       try {
-        const announcement = req.body;
+        const { title, content } = req.body;
+        if (!title || !content) {
+          return res.status(400).json({ message: "Title and content are required" });
+        }
+
+        const announcement = {
+          title,
+          content,
+          date: new Date(),
+        };
+
         const result = await announcementsCollection.insertOne(announcement);
-        res.json(result);
+        res.status(201).json(result);
       } catch (error) {
+        console.error("Error creating announcement:", error);
         res.status(500).json({ message: error.message });
       }
     });
 
     app.get("/announcements", async (req, res) => {
       try {
-        const announcements = await announcementsCollection.find({}).toArray();
+        const announcements = await announcementsCollection.find({})
+          .sort({ date: -1 })
+          .toArray();
         res.json(announcements);
       } catch (error) {
+        console.error("Error fetching announcements:", error);
         res.status(500).json({ message: error.message });
       }
     });
 
     app.put("/announcements/:id", async (req, res) => {
       try {
-        const id = req.params.id;
-        const updatedAnnouncement = req.body;
-        const filter = { _id: new ObjectId(id) };
-        const options = { upsert: true };
-        const updateDoc = { $set: updatedAnnouncement };
+        const { id } = req.params;
+        const { title, content, date } = req.body;
+
+        if (!title || !content) {
+          return res.status(400).json({ message: 'Title and content are required' });
+        }
+
         const result = await announcementsCollection.updateOne(
-          filter,
-          updateDoc,
-          options
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              title,
+              content,
+              date: new Date(date)
+            }
+          }
         );
-        res.json(result);
+
+        if (result.matchedCount === 0) {
+          return res.status(404).json({ message: 'Announcement not found' });
+        }
+
+        res.json({ message: 'Announcement updated successfully' });
       } catch (error) {
+        console.error('Error updating announcement:', error);
         res.status(500).json({ message: error.message });
       }
     });
 
     app.delete("/announcements/:id", async (req, res) => {
       try {
-        const id = req.params.id;
-        const query = { _id: new ObjectId(id) };
-        const result = await announcementsCollection.deleteOne(query);
-        res.json(result);
+        const result = await announcementsCollection.deleteOne({
+          _id: new ObjectId(req.params.id)
+        });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).json({ message: "Announcement not found" });
+        }
+
+        res.json({ message: "Announcement deleted successfully" });
       } catch (error) {
+        console.error("Error deleting announcement:", error);
         res.status(500).json({ message: error.message });
       }
     });
@@ -350,6 +383,46 @@ async function run() {
         }
         res.json(result);
       } catch (error) {
+        res.status(500).json({ message: error.message });
+      }
+    });
+
+    // Reject booking
+    app.delete('/bookings/:id/reject', async (req, res) => {
+      try {
+        const bookingId = req.params.id;
+        const result = await bookingsCollection.deleteOne({
+          _id: new ObjectId(bookingId)
+        });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).json({ message: 'Booking not found' });
+        }
+
+        res.json({ message: 'Booking rejected successfully' });
+      } catch (error) {
+        console.error('Error rejecting booking:', error);
+        res.status(500).json({ message: error.message });
+      }
+    });
+
+    // ------------------- Admin Routes -------------------
+    // Get admin stats
+    app.get('/admin/stats', async (req, res) => {
+      try {
+        const [courts, users, approvedBookings] = await Promise.all([
+          courtsCollection.countDocuments(),
+          usersCollection.countDocuments(),
+          bookingsCollection.countDocuments({ status: 'approved' })
+        ]);
+
+        res.json({
+          totalCourts: courts,
+          totalUsers: users,
+          totalMembers: approvedBookings
+        });
+      } catch (error) {
+        console.error('Error fetching admin stats:', error);
         res.status(500).json({ message: error.message });
       }
     });
