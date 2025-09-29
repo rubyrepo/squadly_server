@@ -274,26 +274,80 @@ async function run() {
       }
     });
 
-    app.get("/bookings/pending", async (req, res) => {
+    // Get all pending bookings
+    app.get('/bookings/pending', async (req, res) => {
       try {
-        const pendingBookings = await bookingsCollection.find({ status: "pending" }).toArray();
+        const pendingBookings = await bookingsCollection
+          .find({ status: 'pending' })
+          .toArray();
+        res.json(pendingBookings);
+      } catch (error) {
+        console.error('Error fetching pending bookings:', error);
+        res.status(500).json({ message: error.message });
+      }
+    });
+
+    // Approve booking
+    app.put('/bookings/:id/approve', async (req, res) => {
+      try {
+        const bookingId = req.params.id;
+        const result = await bookingsCollection.updateOne(
+          { _id: new ObjectId(bookingId) },
+          {
+            $set: {
+              status: 'approved',
+              approvedAt: new Date()
+            }
+          }
+        );
+
+        if (result.matchedCount === 0) {
+          return res.status(404).json({ message: 'Booking not found' });
+        }
+
+        res.json({ message: 'Booking approved successfully' });
+      } catch (error) {
+        console.error('Error approving booking:', error);
+        res.status(500).json({ message: error.message });
+      }
+    });
+
+    // Get user's approved bookings
+    app.get("/bookings/approved/:email", async (req, res) => {
+      try {
+        const { email } = req.params;
+        const approvedBookings = await bookingsCollection
+          .find({ userEmail: email, status: "approved" })
+          .toArray();
+        res.json(approvedBookings);
+      } catch (error) {
+        res.status(500).json({ message: error.message });
+      }
+    });
+
+    // Get user's pending bookings
+    app.get("/bookings/pending/:email", async (req, res) => {
+      try {
+        const { email } = req.params;
+        const pendingBookings = await bookingsCollection
+          .find({ userEmail: email, status: "pending" })
+          .toArray();
         res.json(pendingBookings);
       } catch (error) {
         res.status(500).json({ message: error.message });
       }
     });
 
-    app.put("/bookings/:id/approve", async (req, res) => {
+    // Cancel booking
+    app.delete("/bookings/:id", async (req, res) => {
       try {
-        const result = await bookingsCollection.updateOne(
-          { _id: new ObjectId(req.params.id) },
-          {
-            $set: {
-              status: "approved",
-              approvedAt: new Date(),
-            },
-          }
-        );
+        const { id } = req.params;
+        const result = await bookingsCollection.deleteOne({
+          _id: new ObjectId(id)
+        });
+        if (result.deletedCount === 0) {
+          return res.status(404).json({ message: "Booking not found" });
+        }
         res.json(result);
       } catch (error) {
         res.status(500).json({ message: error.message });
