@@ -376,6 +376,24 @@ async function run() {
       }
     });
 
+    // Get confirmed bookings for specific user
+    app.get('/bookings/confirmed/:email', async (req, res) => {
+      try {
+        const { email } = req.params;
+        const bookings = await bookingsCollection
+          .find({ 
+            userEmail: email,
+            status: 'confirmed'
+          })
+          .sort({ paidAt: -1 })
+          .toArray();
+        res.json(bookings);
+      } catch (error) {
+        console.error('Error fetching confirmed bookings:', error);
+        res.status(500).json({ message: error.message });
+      }
+    });
+
     // Cancel booking
     app.delete("/bookings/:id", async (req, res) => {
       try {
@@ -504,28 +522,37 @@ async function run() {
     // Process payment
     app.post('/payments', async (req, res) => {
       try {
-        const paymentData = req.body;
+        const { bookingId, amount, couponCode, userEmail, date } = req.body;
         
-        // Create payment record
+        // Create payment record with user email
         const payment = await paymentsCollection.insertOne({
-          ...paymentData,
+          bookingId: new ObjectId(bookingId),
+          amount,
+          couponCode,
+          userEmail,
+          date: new Date(date),
           status: 'completed',
           createdAt: new Date()
         });
 
         // Update booking status
         await bookingsCollection.updateOne(
-          { _id: new ObjectId(paymentData.bookingId) },
+          { _id: new ObjectId(bookingId) },
           { 
             $set: { 
               status: 'confirmed',
-              payment: payment.insertedId
+              payment: payment.insertedId,
+              paidAt: new Date()
             }
           }
         );
 
-        res.status(201).json({ message: 'Payment processed successfully' });
+        res.status(201).json({ 
+          message: 'Payment processed successfully',
+          paymentId: payment.insertedId
+        });
       } catch (error) {
+        console.error('Payment processing error:', error);
         res.status(500).json({ message: error.message });
       }
     });
@@ -541,6 +568,38 @@ async function run() {
         
         res.json({ isMember: bookings.length > 0 });
       } catch (error) {
+        res.status(500).json({ message: error.message });
+      }
+    });
+
+    // Get payment history for specific user
+    app.get('/payments/history/:email', async (req, res) => {
+      try {
+        const { email } = req.params;
+        const payments = await paymentsCollection
+          .aggregate([
+            {
+              $match: { userEmail: email }
+            },
+            {
+              $lookup: {
+                from: 'bookings',
+                localField: 'bookingId',
+                foreignField: '_id',
+                as: 'booking'
+              }
+            },
+            {
+              $unwind: '$booking'
+            },
+            {
+              $sort: { createdAt: -1 }
+            }
+          ])
+          .toArray();
+        res.json(payments);
+      } catch (error) {
+        console.error('Error fetching payment history:', error);
         res.status(500).json({ message: error.message });
       }
     });
